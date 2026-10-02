@@ -1,17 +1,11 @@
 # BookIt — платформа онлайн-записи (Django)
 
-Клиенты записываются к специалистам через календарь слотов. Три роли: **клиент**, **специалист**, **администратор**
-
-## Быстрый старт
 env\Scripts\activate       
 python manage.py migrate
-python manage.py seed_demo      (необязательно — демо-данные)
+python manage.py seed_demo  
 python manage.py runserver
-```
+
 Открыть: http://127.0.0.1:8000/
-
-
-**Демо-аккаунты** (после `seed_demo`): `admin / admin12345`; специалисты `anna`, `ivan`, `dana`, `timur`; клиенты `client1`, `client2` (пароль у всех `demo12345`).
 
 ## Что умеет
 | Роль | Возможности |
@@ -23,12 +17,10 @@ python manage.py runserver
 
 ## Структура
 
-```
 config/     настройки, корневые urls
 users/      User с ролью, регистрация/вход, профиль, декоратор role_required
 booking/    модели Category/Service/TimeSlot/Booking/Review, views, forms, services.py (нарезка слотов), notifications.py (email), тесты, seed_demo
 templates/  base + страницы;  static/css/style.css
-```
 
 ## Ключевые решения (для защиты)
 
@@ -38,6 +30,3 @@ templates/  base + страницы;  static/css/style.css
 4. **Календарь** — FullCalendar (подключён с CDN, нужен интернет), события отдаёт JSON-эндпоинт `/providers/<id>/slots.json`.
 5. **База данных** — SQLite: простой файл, не требует установки сервера БД, чего для дипломного стенда достаточно. При желании переключить на PostgreSQL — в `config/settings.py` заменить блок DATABASES на `django.db.backends.postgresql` с нужными параметрами, остальной код не меняется.
 6. **Генерация слотов** — `booking/services.py`: интервал режется по длительности услуги, пересечения и прошлое пропускаются.
-
-## Идеи для развития
-Напоминания за день до записи (Celery), онлайн-оплата, статистика для админа, экспорт записи в календарь (.ics).
