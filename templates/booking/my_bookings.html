@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Мои записи{% endblock %}
+{% block content %}
+<h1>Мои записи</h1>
+
+<div class="card">
+  <h2>Предстоящие</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Специалист</th><th>Услуга</th><th>Когда</th><th>Статус</th><th></th></tr>
+    {% for b in upcoming %}
+    <tr>
+      <td><div class="row"><span class="avatar sm">{{ b.slot.provider.initial }}</span><a href="{% url 'provider_detail' b.slot.provider_id %}">{{ b.slot.provider.display_name }}</a></div></td>
+      <td>{{ b.slot.service.title|default:"—" }}</td>
+      <td><strong>{{ b.slot.start_time|date:"j E, H:i" }}</strong></td>
+      <td><span class="badge {{ b.status }}">{{ b.get_status_display }}</span></td>
+      <td>{% if b.can_cancel %}<form method="post" action="{% url 'booking_cancel' b.pk %}" class="inline" onsubmit="return confirm('Отменить запись?')">{% csrf_token %}<button class="btn danger sm">Отменить</button></form>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Нет предстоящих записей. <a href="{% url 'home' %}">Выбрать специалиста →</a></td></tr>{% endfor %}
+  </table></div>
+  <p class="muted" style="margin:.8rem 0 0">Отменить запись можно не позже чем за 2 часа до начала.</p>
+</div>
+
+<div class="card">
+  <h2>История</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Специалист</th><th>Услуга</th><th>Когда</th><th>Статус</th><th></th></tr>
+    {% for b in history %}
+    <tr>
+      <td><a href="{% url 'provider_detail' b.slot.provider_id %}">{{ b.slot.provider.display_name }}</a></td>
+      <td>{{ b.slot.service.title|default:"—" }}</td>
+      <td>{{ b.slot.start_time|date:"d.m.Y H:i" }}</td>
+      <td><span class="badge {{ b.status }}">{{ b.get_status_display }}</span></td>
+      <td>{% if b.status == "completed" %}{% if b.has_review %}<span class="rating">{{ b.review.stars }}</span>{% else %}<button class="btn ghost sm" data-review="{{ b.pk }}" data-name="{{ b.slot.provider.display_name }}">★ Оставить отзыв</button>{% endif %}{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">История пока пуста.</td></tr>{% endfor %}
+  </table></div>
+</div>
+
+<dialog id="reviewDlg">
+  <h2>Как всё прошло?</h2>
+  <p class="muted" id="reviewFor"></p>
+  <form method="post" id="reviewForm">{% csrf_token %}
+    <div class="stars-input">
+      {% for i in "54321" %}<input type="radio" name="rating" id="star{{ i }}" value="{{ i }}"><label for="star{{ i }}" title="{{ i }}">★</label>{% endfor %}
+    </div>
+    <div class="field"><textarea name="text" rows="3" placeholder="Расскажите о впечатлениях (необязательно)"></textarea></div>
+    <div class="row"><button class="btn">Отправить</button><button type="button" class="btn ghost" id="reviewClose">Отмена</button></div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rd = document.getElementById('reviewDlg'), reviewUrl = "{% url 'review_create' 999999 %}";
+document.querySelectorAll('[data-review]').forEach(b => b.onclick = () => {
+  document.getElementById('reviewForm').action = reviewUrl.replace('999999', b.dataset.review);
+  document.getElementById('reviewFor').textContent = b.dataset.name;
+  rd.showModal();
+});
+document.getElementById('reviewClose').onclick = () => rd.close();
+</script>
+{% endblock %}

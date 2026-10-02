@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Запишитесь к специалисту за минуту</h1>
+  <p>Выберите услугу, свободное время в календаре — и готово.</p>
+  <form class="search" method="get">
+    <input name="q" value="{{ q }}" placeholder="🔍  Имя, специальность или услуга…">
+    <select name="category">
+      <option value="">Все категории</option>
+      {% for c in categories %}<option value="{{ c.pk }}" {% if cat == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>{% endfor %}
+    </select>
+    <button class="btn">Найти</button>
+  </form>
+</section>
+
+<div class="chips">
+  <a class="chip {% if not cat %}active{% endif %}" href="{% url 'home' %}{% if q %}?q={{ q|urlencode }}{% endif %}">Все</a>
+  {% for c in categories %}<a class="chip {% if cat == c.pk|stringformat:'s' %}active{% endif %}" href="?category={{ c.pk }}{% if q %}&q={{ q|urlencode }}{% endif %}">{{ c.icon }} {{ c.name }}</a>{% endfor %}
+</div>
+
+<div class="grid">
+  {% for p in providers %}
+  <div class="card lift">
+    <div class="row" style="gap:.9rem;margin-bottom:.8rem">
+      <span class="avatar" style="width:52px;height:52px">{{ p.initial }}</span>
+      <div>
+        <h3><a href="{% url 'provider_detail' p.pk %}" style="color:inherit">{{ p.display_name }}</a></h3>
+        <div class="muted">{{ p.specialty|default:"Специалист" }}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:.6rem">
+      {% if p.avg_rating %}<span class="rating">★ {{ p.avg_rating|floatformat:1 }}</span> <span class="muted">· {{ p.reviews_count }} отзыв(ов)</span>
+      {% else %}<span class="muted">Пока без отзывов</span>{% endif %}
+    </div>
+    <div style="min-height:3.2rem">
+      {% for s in p.active_services|slice:":3" %}<span class="tag">{{ s.title }} · {{ s.price|floatformat:"-2" }} ₸</span>{% endfor %}
+    </div>
+    <div class="row spread" style="margin-top:.9rem">
+      <span class="muted">{% if p.next_free %}🟢 Ближайшее: {{ p.next_free|date:"j E, H:i" }}{% else %}Нет свободных слотов{% endif %}</span>
+      <a class="btn sm" href="{% url 'provider_detail' p.pk %}">Записаться</a>
+    </div>
+  </div>
+  {% empty %}
+  <div class="card empty" style="grid-column:1/-1">Никого не нашли 😕<br>Попробуйте изменить запрос или <a href="{% url 'home' %}">сбросить фильтры</a>.</div>
+  {% endfor %}
+</div>
+{% endblock %}

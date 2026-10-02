@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Кабинет специалиста{% endblock %}
+{% block content %}
+<h1>Кабинет специалиста</h1>
+
+<div class="stats">
+  <div class="stat"><b>{{ stats.today }}</b><span>📅 Записей сегодня</span></div>
+  <div class="stat"><b>{{ stats.pending }}</b><span>⏳ Ждут подтверждения</span></div>
+  <div class="stat"><b>{{ stats.free }}</b><span>🟢 Свободных слотов</span></div>
+  <div class="stat"><b>{{ stats.revenue|floatformat:"-0" }} ₸</b><span>💰 Выручка за месяц</span></div>
+  <div class="stat"><b>{% if stats.rating %}★ {{ stats.rating|floatformat:1 }}{% else %}—{% endif %}</b><span>Рейтинг ({{ stats.reviews }})</span></div>
+</div>
+
+<div class="tabs">
+  <button class="tab" data-tab="schedule">🗓 Расписание</button>
+  <button class="tab" data-tab="bookings">👥 Записи клиентов</button>
+  <button class="tab" data-tab="services">🛠 Услуги</button>
+</div>
+
+<section data-panel="schedule">
+  <div class="split">
+    <div class="card">
+      <div class="legend"><span><span class="dot"></span>Свободно (клик — удалить слот)</span><span><span class="dot filled"></span>Занято</span></div>
+      <div id="calendar"></div>
+    </div>
+    <div class="card">
+      <h2>Создать слоты</h2>
+      <form method="post" action="{% url 'slots_generate' %}">{% csrf_token %}
+        {% include "includes/form.html" with form=slot_form %}
+        <button class="btn block">Создать слоты</button>
+      </form>
+      <p class="muted" style="margin:.8rem 0 0">Рабочее время нарезается на слоты длиной в выбранную услугу. Занятое время и прошлое пропускаются.</p>
+    </div>
+  </div>
+</section>
+
+<section data-panel="bookings" hidden>
+  <div class="card table-wrap">
+    <table>
+      <tr><th>Клиент</th><th>Услуга</th><th>Когда</th><th>Комментарий</th><th>Статус</th><th></th></tr>
+      {% for b in bookings %}
+      <tr>
+        <td><div class="row"><span class="avatar sm">{{ b.client.initial }}</span><div>{{ b.client.display_name }}<div class="muted">{{ b.client.phone|default:"" }}</div></div></div></td>
+        <td>{{ b.slot.service.title|default:"—" }}</td>
+        <td><strong>{{ b.slot.start_time|date:"d.m.Y H:i" }}</strong></td>
+        <td class="muted">{{ b.comment|default:"—" }}</td>
+        <td><span class="badge {{ b.status }}">{{ b.get_status_display }}</span></td>
+        <td><div class="row">
+          {% if b.status == "pending" %}<form method="post" action="{% url 'booking_status' b.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="action" value="confirm"><button class="btn sm">✓ Подтвердить</button></form>{% endif %}
+          {% if b.status == "confirmed" %}<form method="post" action="{% url 'booking_status' b.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="action" value="complete"><button class="btn ghost sm">Завершить</button></form>{% endif %}
+          {% if b.status == "pending" or b.status == "confirmed" %}<form method="post" action="{% url 'booking_status' b.pk %}" class="inline" onsubmit="return confirm('Отменить запись?')">{% csrf_token %}<input type="hidden" name="action" value="cancel"><button class="btn danger sm">Отменить</button></form>{% endif %}
+        </div></td>
+      </tr>
+      {% empty %}<tr><td colspan="6" class="empty">Записей пока нет — создайте слоты, и клиенты смогут записываться.</td></tr>{% endfor %}
+    </table>
+  </div>
+</section>
+
+<section data-panel="services" hidden>
+  <div class="split">
+    <div class="card table-wrap">
+      <table>
+        <tr><th>Название</th><th>Категория</th><th>Длительность</th><th>Цена</th><th></th></tr>
+        {% for s in services %}
+        <tr><td>{{ s.title }}{% if not s.is_active %} <span class="muted">(скрыта)</span>{% endif %}</td><td>{{ s.category|default:"—" }}</td><td>{{ s.duration_minutes }} мин</td><td>{{ s.price|floatformat:"-2" }} ₸</td>
+          <td><form method="post" action="{% url 'service_toggle' s.pk %}" class="inline">{% csrf_token %}<button class="btn ghost sm">{% if s.is_active %}Скрыть{% else %}Показать{% endif %}</button></form></td></tr>
+        {% empty %}<tr><td colspan="5" class="empty">Добавьте первую услугу, чтобы создавать слоты.</td></tr>{% endfor %}
+      </table>
+    </div>
+    <div class="card">
+      <h2>Новая услуга</h2>
+      <form method="post" action="{% url 'service_create' %}">{% csrf_token %}
+        {% include "includes/form.html" with form=service_form %}
+        <button class="btn block">Добавить</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/ru.global.min.js"></script>
+<script>
+const delUrl = "{% url 'slot_delete' 999999 %}";
+const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
+  locale: 'ru', firstDay: 1, allDaySlot: false, nowIndicator: true, height: 'auto',
+  slotMinTime: '07:00:00', slotMaxTime: '22:00:00',
+  initialView: window.innerWidth < 700 ? 'listWeek' : 'timeGridWeek',
+  headerToolbar: {left: 'prev,next today', center: 'title', right: 'timeGridWeek,listWeek'},
+  events: "{% url 'provider_slots' provider.pk %}?mine=1",
+  async eventClick(info) {
+    const p = info.event.extendedProps;
+    if (p.booked) { alert('Слот занят' + (p.client ? ': ' + p.client : '') + '. Отмена — во вкладке «Записи клиентов».'); return; }
+    if (!confirm('Удалить свободный слот?')) return;
+    const r = await fetch(delUrl.replace('999999', info.event.id), {method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'}});
+    if (r.ok) cal.refetchEvents(); else alert('Не удалось удалить слот');
+  }
+});
+cal.render();
+// вкладки (запоминаются в адресе: #schedule / #bookings / #services)
+function show(name) {
+  if (!document.querySelector(`[data-panel="${name}"]`)) name = 'schedule';
+  document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== name);
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  if (name === 'schedule') cal.updateSize();
+  history.replaceState(null, '', '#' + name);
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.tab));
+show(location.hash.slice(1) || 'schedule');
+</script>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ provider.display_name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="row" style="gap:1.2rem;align-items:flex-start">
+    <span class="avatar xl">{{ provider.initial }}</span>
+    <div style="flex:1;min-width:220px">
+      <h1 style="margin:0">{{ provider.display_name }}</h1>
+      <div class="muted">{{ provider.specialty|default:"Специалист" }}</div>
+      <div style="margin:.4rem 0">
+        {% if avg_rating %}<span class="rating">★ {{ avg_rating|floatformat:1 }}</span> <span class="muted">· {{ reviews_count }} отзыв(ов)</span>{% else %}<span class="muted">Пока без отзывов</span>{% endif %}
+      </div>
+      {% if provider.bio %}<p style="margin:.4rem 0 0">{{ provider.bio|linebreaksbr }}</p>{% endif %}
+    </div>
+  </div>
+</div>
+
+<h2>Услуги <span class="muted">— нажмите на услугу, чтобы показать только её слоты</span></h2>
+<div class="grid" style="margin-bottom:1.2rem">
+  {% for s in services %}
+  <div class="card lift svc" data-id="{{ s.pk }}" style="cursor:pointer">
+    <div class="row spread"><strong>{{ s.title }}</strong><span class="rating">{{ s.price|floatformat:"-2" }} ₸</span></div>
+    <div class="muted">⏱ {{ s.duration_minutes }} мин{% if s.category %} · {{ s.category }}{% endif %}</div>
+    {% if s.description %}<p class="muted" style="margin:.5rem 0 0">{{ s.description }}</p>{% endif %}
+  </div>
+  {% empty %}<div class="card empty">Специалист ещё не добавил услуги.</div>{% endfor %}
+</div>
+
+<div class="card" id="cal-card">
+  <div class="row spread" style="margin-bottom:.6rem">
+    <h2 style="margin:0">Выберите время</h2>
+    <select id="svcFilter" style="width:auto;min-width:200px">
+      <option value="">Все услуги</option>
+      {% for s in services %}<option value="{{ s.pk }}">{{ s.title }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="legend"><span><span class="dot"></span>Свободно — нажмите, чтобы записаться</span><span><span class="dot filled"></span>Занято</span></div>
+  <div id="calendar"></div>
+</div>
+
+<div class="card">
+  <h2>Отзывы</h2>
+  {% for r in reviews %}
+  <div class="review">
+    <div class="row spread"><strong>{{ r.booking.client.display_name }}</strong><span class="rating">{{ r.stars }}</span></div>
+    {% if r.text %}<p style="margin:.3rem 0">{{ r.text|linebreaksbr }}</p>{% endif %}
+    <div class="muted">{{ r.created_at|date:"j E Y" }}</div>
+  </div>
+  {% empty %}<div class="empty">Отзывов пока нет. Они появятся после первых завершённых приёмов.</div>{% endfor %}
+</div>
+
+<dialog id="dlg">
+  <h2>Запись на приём</h2>
+  <p id="dlgInfo" style="font-weight:600"></p>
+  {% if user.is_authenticated and user.role == "client" %}
+  <form method="post" id="bookForm">{% csrf_token %}
+    <div class="field"><label>Комментарий (необязательно)</label><textarea name="comment" rows="2"></textarea></div>
+    <div class="row"><button class="btn">Записаться</button><button type="button" class="btn ghost dlgClose">Отмена</button></div>
+  </form>
+  {% elif user.is_authenticated %}
+  <p class="muted">Записываться могут только клиенты.</p><button type="button" class="btn ghost dlgClose">Закрыть</button>
+  {% else %}
+  <p><a href="{% url 'login' %}?next={{ request.path }}">Войдите</a> или <a href="{% url 'register' %}">зарегистрируйтесь</a>, чтобы записаться.</p>
+  <button type="button" class="btn ghost dlgClose">Закрыть</button>
+  {% endif %}
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/ru.global.min.js"></script>
+<script>
+const dlg = document.getElementById('dlg');
+const bookUrl = "{% url 'book_slot' 999999 %}";
+const filter = document.getElementById('svcFilter');
+document.querySelectorAll('.dlgClose').forEach(b => b.onclick = () => dlg.close());
+const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
+  locale: 'ru', firstDay: 1, allDaySlot: false, nowIndicator: true, height: 'auto',
+  slotMinTime: '07:00:00', slotMaxTime: '22:00:00',
+  initialView: window.innerWidth < 700 ? 'listWeek' : 'timeGridWeek',
+  headerToolbar: {left: 'prev,next today', center: 'title', right: 'timeGridWeek,listWeek'},
+  events: {url: "{% url 'provider_slots' provider.pk %}", extraParams: () => ({service: filter.value})},
+  noEventsText: 'Свободных слотов нет',
+  eventClick(info) {
+    const p = info.event.extendedProps;
+    if (p.booked) return;
+    const when = info.event.start.toLocaleString('ru-RU', {weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'});
+    document.getElementById('dlgInfo').textContent = (p.service ? p.service + (p.price ? ' · ' + Number(p.price) + ' ₸' : '') + ' — ' : '') + when;
+    const f = document.getElementById('bookForm');
+    if (f) f.action = bookUrl.replace('999999', info.event.id);
+    dlg.showModal();
+  }
+});
+cal.render();
+filter.onchange = () => cal.refetchEvents();
+document.querySelectorAll('.svc').forEach(c => c.onclick = () => {
+  filter.value = filter.value === c.dataset.id ? '' : c.dataset.id;
+  cal.refetchEvents();
+  document.getElementById('cal-card').scrollIntoView({behavior: 'smooth'});
+});
+</script>
+{% endblock %}
